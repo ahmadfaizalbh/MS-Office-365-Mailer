@@ -1,17 +1,9 @@
 import datetime
-import logging
 import urllib2
 import urllib
 import json
 import time
 import os
-
-
-Error_file = "DB_Error" + str(datetime.datetime.now()) + ".log"
-logging.basicConfig(filename=Error_file,
-                    level=logging.DEBUG,
-                    format='%(asctime)s %(levelname)s %(name)s %(message)s')
-logger=logging.getLogger(__name__)
 
 
 class MSOFileHandler:
@@ -64,26 +56,25 @@ class MSOffice365:
     A microsoft 365 Outlook access class
     '''    
 
-    def __init__(self,mail_box=None):
+    def __init__(self,username,password,mail_box,sourceDir=".",destinationDir="."):
         '''
         Default Initializer function
+        MSOffice365('username@company.com','password','test@company.com',sourceDir="Uploads",destinationDir="Downloads")
         '''
         
-        from Settings import MSO365_Credentials as MSO365
-        from Settings import Default_File_locations as DFL
         
         password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-        self.MailBox_id = MSO365['mail_box_ID'] if not mail_box else mail_box
+        self.MailBox_id = username if not mail_box else mail_box
         self.top_level_url = \
         "https://outlook.office365.com/api/v1.0/Users('%s')" % self.MailBox_id
         password_mgr.add_password(None,
                                   self.top_level_url,
-                                  MSO365['username'],
-                                  MSO365['password'])
+                                  username,
+                                  password)
         handler = urllib2.HTTPBasicAuthHandler(password_mgr)
         self.opener = urllib2.build_opener(handler)
-        self.FileHandler = MSOFileHandler(def_read_dir=DFL['Read_From_Dir'],
-                                          def_write_dir=DFL['Create_in_Dir'])
+        self.FileHandler = MSOFileHandler(def_read_dir=sourceDir,
+                                          def_write_dir=destinationDir)
 
     @property
     def DisplayName(self):
@@ -166,11 +157,12 @@ class MSOffice365:
                 raise ValueError("Invalid Argument Syntax")
         return url
 
-    def Messages(self,q=None,mail_id=None, Folder_id=None):
+    def Messages(self,q=None,mail_id=None, folder_id=None):
         """
+        Messages(q=query,mail_id=mailId,folder_id=folderId)
         """
         
-        url = (("/Folders('" + Folder_id + "')") if Folder_id else "") \
+        url = (("/Folders('" + folder_id + "')") if folder_id else "") \
               + "/Messages" + (("""('""" + mail_id + """')/""") if mail_id \
               else "/")
         url = self.buildQuery(url, q)
@@ -239,14 +231,28 @@ class MSOffice365:
         })
         return self.Post("/sendmail", json_data)
 
-    def CreateDraftMessage(self, Folder_id='inbox',
+    def CreateDraftMessage(self, folder_id='inbox',
                            Subject="Have you seen this new Mail REST API?",
                            Importance="High", Body=None, ToRecipients=None,
                            Attachments=[]):
         """
+        CreateDraftMessage(folder_id='inbox',
+                           Subject="Have you seen this new Mail REST API?",
+                           Importance="High",
+                           Body={
+                                  "ContentType": "HTML",
+                                  "Content": "It looks awesome!<br/> This is test mail"
+                                },
+                           ToRecipients=[{
+                                  "EmailAddress": {
+                                      "Name": ToDisplayName,
+                                      "Address": ToEmailAdress    
+                                      }
+                                }],
+                           Attachments=['test1.docx','test2.docx'])
         """
         
-        url = "/folders('" + Folder_id + "')/messages"
+        url = "/folders('" + folder_id + "')/messages"
         message_data = {    
                   "Subject": Subject,    
                   "Importance": Importance,    
@@ -269,11 +275,12 @@ class MSOffice365:
         json_data=json.dumps(message_data)
         return self.Post(url, json_data)
 
-    def CreateFolder(self, Folder_id, DisplayName):
+    def CreateFolder(self, folder_id, DisplayName):
         """
+        CreateFolder(folder_id, DisplayName)
         """
 
-        url = "/Folders('" + Folder_id + "')/childfolders"
+        url = "/Folders('" + folder_id + "')/childfolders"
         json_data = json.dumps({
           "DisplayName": DisplayName
         })
@@ -281,7 +288,8 @@ class MSOffice365:
 
     def CreateContact(self, GivenName="Your Name", EmailAddresses=[],
                       BusinessPhones=[]):
-        """CreateContact(
+        """
+        CreateContact(
             GivenName = "Your Name",
             EmailAddresses = [{
                                 "Address":"username@company.com",
@@ -297,17 +305,19 @@ class MSOffice365:
         }) 
         return self.Post("/Contacts", json_data)
 
-    def Folders(self, Folder_id=None, q=None):
+    def Folders(self, folder_id=None, q=None):
         """
+        Folders(folder_id=folderId, q=query)
         """
 
-        url = "/Folders" + (("""('""" + Folder_id + """')/""") if Folder_id \
+        url = "/Folders" + (("""('""" + folder_id + """')/""") if folder_id \
               else "/")
         url = self.buildQuery(url, q)
         return self.open(url)
     
     def Calendars(self, Calender_id=None, q=None):
         """
+        Calendars(Calender_id=CalenderId, q=query)
         """
 
         url = "/Calendars" + (("""('""" + Calender_id + """')/""") \
@@ -317,6 +327,7 @@ class MSOffice365:
 
     def CalendarGroups(self, CalGroup_id=None, q=None):
         """
+        CalendarGroups(CalGroup_id=CalGroupId, q=query)
         """
 
         url = "/CalendarGroups" + (("""('""" + CalGroup_id + """')/""") \
@@ -326,6 +337,7 @@ class MSOffice365:
 
     def Events(self, Event_id=None, q=None):
         """
+        Events(Event_id=EventId, q=query)
         """
 
         url = "/Events"+(("""('""" + Event_id + """')/""") if Event_id \
@@ -333,19 +345,21 @@ class MSOffice365:
         url = self.buildQuery(url, q)    
         return self.open(url)    
 
-    def Contacts(self, Contact_id=None, Folder_id=None, q=None):
+    def Contacts(self, Contact_id=None, folder_id=None, q=None):
         """
+        Contacts(self, Contact_id=ContactId, folder_id=folderId, q=query)
         """
 
-        url = (("/Contactfolders('" + Folder_id + "')") if Folder_id else "") \
+        url = (("/Contactfolders('" + folder_id + "')") if folder_id else "") \
               + "/Contacts" + (("""('""" + Contact_id + """')/""") \
               if Contact_id else "/")    
         url = self.buildQuery(url, q)
         return self.open(url)
 
     def ContactFolders(self, Contact_id=None, q=None):
-        ""
-        ""
+        """
+        ContactFolders(Contact_id=ContactId, q=query)
+        """
 
         url = "/Contactfolders" + (("""('""" + Contact_id + """')/""") \
               if Contact_id else "/")    
